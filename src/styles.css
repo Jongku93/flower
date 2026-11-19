@@ -1,0 +1,695 @@
+:root {
+  --grass-1: #8fd170;
+  --grass-2: #4f9a43;
+  --grass-3: #2f6e2f;
+  --mint-1: #e9fff8;
+  --mint-2: #bdeee0;
+  --mint-3: #86d6c1;
+  --mint-edge: #5fb9a4;
+  --ink: #23412a;
+  --cream: #fffdf3;
+  --gold: #ffcf3a;
+  --board: min(94vw, calc(100dvh - 290px), 540px);
+  font-size: 17px;
+  color-scheme: light;
+}
+html.big-text {
+  font-size: 20px;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+body {
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--grass-2);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- 정원 배경 ---------- */
+.app {
+  position: relative;
+  height: 100dvh;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 10px) 12px calc(env(safe-area-inset-bottom) + 10px);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 22% at 12% 102%, rgba(40, 95, 38, 0.55), transparent 70%),
+    radial-gradient(ellipse 55% 20% at 92% 100%, rgba(40, 95, 38, 0.5), transparent 70%),
+    radial-gradient(ellipse 70% 16% at 50% -4%, rgba(255, 255, 220, 0.45), transparent 70%),
+    repeating-linear-gradient(100deg, rgba(255, 255, 255, 0.035) 0 6px, transparent 6px 14px),
+    linear-gradient(180deg, var(--grass-1) 0%, #6db955 38%, var(--grass-2) 72%, var(--grass-3) 100%);
+}
+.garden-deco {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.deco {
+  position: absolute;
+  width: 74px;
+  height: 74px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+  filter: saturate(0.85) drop-shadow(0 3px 2px rgba(0, 50, 0, 0.25));
+}
+.d1 {
+  left: -18px;
+  bottom: 70px;
+  transform: rotate(-12deg);
+}
+.d2 {
+  right: -16px;
+  bottom: 110px;
+  width: 60px;
+  height: 60px;
+  transform: rotate(10deg);
+}
+.d3 {
+  left: -14px;
+  top: 34%;
+  width: 46px;
+  height: 46px;
+}
+.d4 {
+  right: -12px;
+  top: 40%;
+  width: 52px;
+  height: 52px;
+}
+.app > *:not(.garden-deco):not(.fx) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- 위쪽 정보 ---------- */
+.hud {
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 245, 0.88);
+  box-shadow: 0 3px 0 rgba(30, 80, 30, 0.25);
+}
+.hud small {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+.hud b {
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+.hud-score {
+  text-align: right;
+  min-width: 4.5em;
+}
+.goal-text {
+  font-size: 0.82rem;
+  text-align: center;
+}
+.goal-text b {
+  font-size: 1rem;
+}
+.goal-bar {
+  height: 12px;
+  border-radius: 8px;
+  background: #dcefd6;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.goal-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff9fbf, #ffcf3a);
+  border-radius: 8px;
+  transition: width 0.35s ease-out;
+}
+
+/* ---------- 다음 꽃 ---------- */
+.queue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--mint-1), var(--mint-2));
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 3px 0 rgba(30, 90, 70, 0.3);
+}
+.queue-label {
+  font-weight: 900;
+  font-size: 0.85rem;
+  color: #2f7a66;
+  writing-mode: horizontal-tb;
+}
+.q-item {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  opacity: 0.85;
+}
+.q-item.first {
+  width: 68px;
+  height: 68px;
+  opacity: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 30%, rgba(255, 255, 255, 0) 72%);
+  animation: nextIn 0.25s ease-out;
+}
+@keyframes nextIn {
+  from {
+    transform: scale(0.6);
+  }
+}
+
+/* ---------- 보드 ---------- */
+.board-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.board {
+  width: var(--board);
+  height: var(--board);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: 1.6%;
+  padding: 3%;
+  border-radius: 9%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.55), transparent 55%),
+    linear-gradient(160deg, #c9f5ea, #92dcc8 60%, #79cdb7);
+  border: 5px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 6px 0 rgba(25, 90, 70, 0.35),
+    0 14px 26px rgba(0, 40, 0, 0.25);
+}
+.slot {
+  position: relative;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  touch-action: manipulation;
+}
+.slot::before {
+  content: '';
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, #f4fffb 0%, #d4f6ec 55%, #b3e8da 100%);
+  box-shadow:
+    inset 0 3px 6px rgba(40, 120, 100, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.slot.off {
+  visibility: hidden;
+  pointer-events: none;
+}
+.slot.empty:active::before {
+  background: radial-gradient(circle, #fffbe0, #ffeaa0);
+}
+.slot:focus-visible::before {
+  box-shadow: 0 0 0 4px #ffcf3a;
+}
+.board.locked .slot {
+  cursor: default;
+}
+.slot.opened::before {
+  animation: slotOpen 0.5s var(--open-delay) cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes slotOpen {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+/* ---------- 꽃 ---------- */
+.flower {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.flower img {
+  display: block;
+  -webkit-user-drag: none;
+}
+.fl-box {
+  position: absolute;
+  inset: -3%;
+  filter: drop-shadow(0 3px 2px rgba(20, 70, 50, 0.35));
+}
+.fl-box img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+/* 2겹: 안쪽 꽃(위치·크기는 Flower.tsx 가 그림 분석값으로 지정)이 앞 꽃잎 뒤로 들어감 */
+.fl-box img.inner {
+  filter: drop-shadow(0 1px 1.5px rgba(70, 30, 10, 0.45)) saturate(1.08);
+}
+.mark {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid rgba(0, 0, 0, 0.45);
+  font-size: calc(var(--board) / 20);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+.inner-mark {
+  right: auto;
+  left: 0;
+  width: 28%;
+  height: 28%;
+  font-size: calc(var(--board) / 26);
+}
+.q-item .mark {
+  font-size: 12px;
+}
+.c-red { color: #c4161c; }
+.c-yellow { color: #c98a00; }
+.c-pink { color: #e2477d; }
+.c-orange { color: #e05a14; }
+.c-purple { color: #7b3ec4; }
+.c-blue { color: #1f6fd0; }
+
+/* 방금 놓음 */
+.slot.fresh .flower {
+  animation: drop 0.2s cubic-bezier(0.3, 1.5, 0.6, 1) both;
+}
+@keyframes drop {
+  from {
+    transform: scale(0.35);
+    opacity: 0.4;
+  }
+}
+/* 맞은 꽃 반응(0~120ms) */
+.slot.react .flower {
+  animation: react 0.12s ease-out both;
+}
+@keyframes react {
+  to {
+    transform: scale(1.16);
+    filter: brightness(1.25) saturate(1.2);
+  }
+}
+/* 표면층이 벗겨진 뒤 안쪽 꽃: 컵 안 자리·크기로 있다가(650ms) 제 크기로 피어남 */
+.slot.reveal .flower {
+  animation: reveal 0.3s var(--reveal-delay) cubic-bezier(0.3, 1.45, 0.6, 1) both;
+}
+/* 시작 모양 = 바깥 꽃 컵 안에 있던 자리·크기 (nest.json 평균: 위로 15.5%, 0.64배) */
+@keyframes reveal {
+  from {
+    transform: translateY(-15.5%) scale(0.64);
+  }
+}
+
+/* ---------- 연쇄 · 단계 글씨, 점수 ---------- */
+.floats {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--board);
+  height: var(--board);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 900;
+  font-size: 1.7rem;
+  color: #fff6c2;
+  -webkit-text-stroke: 1.5px #8a3a12;
+  text-shadow:
+    0 3px 0 #8a3a12,
+    0 0 8px rgba(255, 255, 255, 0.8);
+  animation: floatUp 1s ease-out forwards;
+  z-index: 3;
+}
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20%) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -190%) scale(1);
+  }
+}
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 4;
+  animation: bannerPop 1.25s ease-out forwards;
+}
+.banner b {
+  display: block;
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 2px #d2457f;
+  text-shadow: 0 4px 0 #a52a62;
+  white-space: nowrap;
+}
+.banner.level b {
+  font-size: 3rem;
+  -webkit-text-stroke-color: #3a8a2f;
+  text-shadow: 0 4px 0 #2a6a20;
+}
+.banner small {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+  font-size: 1rem;
+}
+@keyframes bannerPop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.4);
+  }
+  15% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.12);
+  }
+  25% {
+    transform: translateX(-50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-14px);
+  }
+}
+.loading {
+  position: absolute;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- 아래 도구 ---------- */
+.tools {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+  justify-content: center;
+}
+.tool {
+  position: relative;
+  flex: 1;
+  max-width: 150px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fffdf0, #ffeeb8);
+  box-shadow: 0 4px 0 #c9a44a;
+  font-weight: 800;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.tool .ico {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.tool em {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: #ff6b8e;
+  color: #fff;
+  font-style: normal;
+  font-size: 0.85rem;
+  line-height: 24px;
+  border: 2px solid #fff;
+}
+.tool:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #c9a44a;
+}
+.tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- 효과 캔버스 ---------- */
+canvas.fx {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---------- 알림 · 대화상자 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 90px);
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(30, 50, 30, 0.9);
+  color: #fff;
+  font-weight: 700;
+  z-index: 20;
+}
+.modal-back {
+  position: fixed !important;
+  inset: 0;
+  z-index: 30 !important;
+  background: rgba(20, 50, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+.modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 88dvh;
+  overflow: auto;
+  border-radius: 24px;
+  background: var(--cream);
+  padding: 18px 18px 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.modal h2 {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 1.35rem;
+}
+.btn {
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-height: 52px;
+  font-weight: 800;
+  background: #eef3e6;
+  box-shadow: 0 3px 0 #b8c6a6;
+  cursor: pointer;
+}
+.btn.primary {
+  background: linear-gradient(180deg, #7fd36b, #4fa845);
+  color: #fff;
+  box-shadow: 0 3px 0 #2f7a2a;
+}
+.btn.danger {
+  background: #ff7d8f;
+  color: #fff;
+  box-shadow: 0 3px 0 #c44a5c;
+}
+.btn.wide {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}
+.help {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.55;
+}
+.help li {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #f4f9ec;
+}
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.help-row .flower {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+.help-row .arrow {
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid #eee6cc;
+  cursor: pointer;
+}
+.toggle > span {
+  flex: 1;
+}
+.toggle b {
+  display: block;
+}
+.toggle small {
+  opacity: 0.7;
+}
+.toggle input {
+  position: absolute;
+  opacity: 0;
+}
+.toggle i {
+  width: 56px;
+  height: 32px;
+  border-radius: 16px;
+  background: #cfd6c4;
+  position: relative;
+  transition: background 0.2s;
+  flex: none;
+}
+.toggle i::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+.toggle input:checked + i {
+  background: #5fbf55;
+}
+.toggle input:checked + i::after {
+  transform: translateX(24px);
+}
+.toggle input:focus-visible + i {
+  outline: 3px solid #ffcf3a;
+}
+.best {
+  text-align: center;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.confirm p {
+  text-align: center;
+  font-weight: 700;
+}
+.confirm .row {
+  display: flex;
+  gap: 10px;
+}
+.confirm .row .btn {
+  flex: 1;
+}
+.result {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.result small {
+  display: block;
+  opacity: 0.7;
+  font-size: 0.78rem;
+}
+.result b {
+  font-size: 1.2rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot .flower,
+  .banner,
+  .float {
+    animation-duration: 0.01s !important;
+  }
+}
