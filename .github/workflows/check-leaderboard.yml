@@ -1,0 +1,22 @@
+# 순위 서버(구글 Apps Script) 점검 — Actions 탭에서 'Run workflow' 로 직접 실행
+# 읽기(GET)만 한다 → 시트에 시험 기록이 남지 않음
+name: 순위 서버 점검
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 순위 읽기 · CORS 헤더 확인
+        run: |
+          URL="${{ vars.LEADERBOARD_URL }}"
+          if [ -z "$URL" ]; then URL=$(grep -o "https://script.google.com/macros/s/[^']*/exec" src/leaderboard/config.ts); fi
+          echo "주소: $URL"
+          curl -sS -L -D headers.txt -H "Origin: https://jongku93.github.io" "$URL?device=d-check0000&name=x" -o body.txt
+          echo "--- 마지막 응답 헤더"; awk 'BEGIN{RS="\r\n\r\n"} END{print}' headers.txt || true
+          grep -i "^HTTP/" headers.txt
+          grep -i "access-control-allow-origin" headers.txt || echo "(CORS 헤더 없음)"
+          echo "--- 본문"; head -c 1500 body.txt; echo
+          python3 -c "import json;d=json.load(open('body.txt'));assert d.get('ok') is True, d;print('OK: 순위', d['total'], '명')"
+          grep -qi "access-control-allow-origin: \*" headers.txt
