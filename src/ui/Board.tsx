@@ -42,6 +42,7 @@ export const Board = forwardRef<HTMLDivElement, Props>(function Board({ view, ma
         const style = {
           '--reveal-delay': `${delay ?? 0}ms`,
           '--open-delay': `${Math.max(0, openedList.indexOf(i)) * 60}ms`,
+          '--rot': `${(i * 137) % 360}deg`, // 연잎 홈 방향을 칸마다 다르게
         } as CSSProperties;
         return (
           <button

@@ -18,6 +18,8 @@ import {
   unlockAudio,
 } from './audio/sfx';
 import { flowerUrl, preloadAll, warmTints } from './fx/assets';
+import { flushPending, setLeaderboardUrl } from './leaderboard/client';
+import { IconGear, IconHelp, IconTrophy, IconUndo, LeafDeco } from './ui/Icons';
 import { PopFx } from './fx/PopFx';
 import { FX_TIMING } from './game/config';
 import { canUndo, newGame, resolveTurn, undo } from './game/engine';
@@ -27,9 +29,14 @@ import { loadBest, loadGame, loadSettings, saveBest, saveGame, saveSettings, typ
 import { ALL_COLORS, type GameState, type TurnResult } from './game/types';
 import { Board, type BoardView } from './ui/Board';
 import { Queue } from './ui/Queue';
-import { GameOverModal, HelpModal, SettingsModal } from './ui/Modals';
+import { GameOverModal, HelpModal, RankModal, SettingsModal } from './ui/Modals';
 
 const TEST_MODE = new URLSearchParams(location.search).has('test');
+// 시험 때만: ?test=1&lb=<가짜 순위 서버 주소>
+if (TEST_MODE) {
+  const lb = new URLSearchParams(location.search).get('lb');
+  if (lb !== null) setLeaderboardUrl(lb);
+}
 const HELP_SEEN_KEY = 'flowerGarden.helpSeen.v1';
 
 interface Hud {
@@ -79,7 +86,8 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [best, setBest] = useState(loadBest);
-  const [modal, setModal] = useState<'none' | 'help' | 'settings'>('none');
+  const [modal, setModal] = useState<'none' | 'help' | 'settings' | 'rank'>('none');
+  const [firstHelp, setFirstHelp] = useState(false);
   const [showOver, setShowOver] = useState(boot.state.over);
   const [toast, setToast] = useState(boot.notice);
   const [banner, setBanner] = useState<Banner | null>(null);
@@ -109,13 +117,21 @@ export default function App() {
       warmTints(ALL_COLORS);
     });
     try {
-      if (!TEST_MODE && !localStorage.getItem(HELP_SEEN_KEY)) setModal('help');
+      if (!TEST_MODE && !localStorage.getItem(HELP_SEEN_KEY)) {
+        setFirstHelp(true);
+        setModal('help');
+      }
     } catch {
       /* 무시 */
     }
+    // 못 보낸 순위 기록: 시작할 때와 인터넷이 다시 될 때 보내기
+    const onOnline = () => void flushPending();
+    window.addEventListener('online', onOnline);
+    void flushPending();
     return () => {
       alive = false;
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('online', onOnline);
     };
   }, []);
 
@@ -292,7 +308,7 @@ export default function App() {
     setModal('none');
   };
 
-  const openModal = (m: 'help' | 'settings') => {
+  const openModal = (m: 'help' | 'settings' | 'rank') => {
     unlockAudio();
     sfxOpen();
     setModal(m);
@@ -336,18 +352,26 @@ export default function App() {
   const cfg = levelConfig(hud.level);
   const progress = Math.min(1, hud.levelPopped / cfg.goal);
 
+  const showHint = ready && !busy && game.turn === 0 && modal === 'none' && !showOver;
+
   return (
     <div className="app">
-      <div className="garden-deco" aria-hidden="true">
-        {(['pink', 'yellow', 'purple', 'red'] as const).map((c, i) => (
+      <div className="backdrop" aria-hidden="true">
+        <svg className="hills" viewBox="0 0 400 300" preserveAspectRatio="none">
+          <path d="M0 120 Q90 60 190 105 T400 90 V300 H0Z" fill="#9fd884" />
+          <path d="M0 170 Q120 120 230 160 T400 150 V300 H0Z" fill="#7cc66a" />
+          <path d="M0 230 Q100 200 210 225 T400 215 V300 H0Z" fill="#5fae55" />
+        </svg>
+        <div className="bushes" />
+        {(['pink', 'yellow', 'purple', 'red', 'blue', 'orange'] as const).map((c, i) => (
           <span key={c} className={`deco d${i + 1}`} style={{ backgroundImage: `url(${flowerUrl(c)})` }} />
         ))}
       </div>
 
       <header className="hud">
         <div className="hud-level">
-          <small>정원</small>
-          <b>{hud.level}단계</b>
+          <small>단계</small>
+          <b>{hud.level}</b>
         </div>
         <div className="hud-goal" aria-label={`이번 단계 목표: 꽃 ${cfg.goal}송이 중 ${Math.min(hud.levelPopped, cfg.goal)}송이`}>
           <div className="goal-text">
@@ -366,7 +390,13 @@ export default function App() {
       <Queue queue={game.queue} marks={settings.marks} />
 
       <main className="board-wrap">
-        <Board ref={boardRef} view={view} marks={settings.marks} locked={busy} onTap={onTap} />
+        <div className={`pond ${showHint ? 'hint' : ''}`}>
+          <LeafDeco className="leaf l1" />
+          <LeafDeco className="leaf l2" />
+          <LeafDeco className="leaf l3" />
+          <Board ref={boardRef} view={view} marks={settings.marks} locked={busy} onTap={onTap} />
+          {showHint && <div className="tap-hint">빈 연잎을 눌러 꽃을 놓아 보세요</div>}
+        </div>
         <div className="floats" aria-hidden="true">
           {floats.map((f) => (
             <span key={f.id} className="float" style={{ left: f.x, top: f.y }} onAnimationEnd={() => setFloats((l) => l.filter((x) => x.id !== f.id))}>
@@ -384,17 +414,21 @@ export default function App() {
       </main>
 
       <nav className="tools">
-        <button type="button" className="tool" onClick={onUndo} disabled={busy || !canUndo(game)} aria-label={`한 수 되돌리기, ${game.undoLeft}번 남음`}>
-          <span className="ico">↶</span>
+        <button type="button" className="tool" onClick={onUndo} disabled={busy || !canUndo(game)} aria-label={`되돌리기, ${game.undoLeft}번 남음`}>
+          <IconUndo />
           <span>되돌리기</span>
           <em>{game.undoLeft}</em>
         </button>
+        <button type="button" className="tool" onClick={() => openModal('rank')}>
+          <IconTrophy />
+          <span>순위</span>
+        </button>
         <button type="button" className="tool" onClick={() => openModal('help')}>
-          <span className="ico">?</span>
+          <IconHelp />
           <span>도움말</span>
         </button>
         <button type="button" className="tool" onClick={() => openModal('settings')}>
-          <span className="ico">⚙</span>
+          <IconGear />
           <span>설정</span>
         </button>
       </nav>
@@ -404,12 +438,26 @@ export default function App() {
       {toast && <div className="toast">{toast}</div>}
 
       {showOver && modal === 'none' && (
-        <GameOverModal score={game.score} best={best} level={game.level} canUndo={canUndo(game)} undoLeft={game.undoLeft} onUndo={onUndo} onNew={onNewGame} />
+        <GameOverModal
+          key={`${game.seed}:${game.turn}:${game.score}`}
+          gameKey={`${game.seed}:${game.turn}:${game.score}`}
+          score={game.score}
+          best={best}
+          level={game.level}
+          popped={game.totalPopped}
+          turns={game.turn}
+          canUndo={canUndo(game)}
+          undoLeft={game.undoLeft}
+          onUndo={onUndo}
+          onNew={onNewGame}
+        />
       )}
       {modal === 'help' && (
         <HelpModal
+          first={firstHelp}
           onClose={() => {
             closeModal();
+            setFirstHelp(false);
             try {
               localStorage.setItem(HELP_SEEN_KEY, '1');
             } catch {
@@ -418,6 +466,7 @@ export default function App() {
           }}
         />
       )}
+      {modal === 'rank' && <RankModal onClose={closeModal} />}
       {modal === 'settings' && (
         <SettingsModal settings={settings} best={best} onChange={changeSettings} onNew={onNewGame} onClose={closeModal} />
       )}

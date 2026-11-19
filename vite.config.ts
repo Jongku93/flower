@@ -29,7 +29,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,webmanifest,mp3}'],
+        // 한글 글꼴은 176조각 → 미리 다 받지 않고, 화면에 쓰인 조각만 처음 쓸 때 저장(오프라인에서도 그 글자는 보임)
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => /\.woff2?$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: { cacheName: 'fonts', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+          },
+        ],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',

@@ -411,6 +411,132 @@ const I = (r, c) => r * 5 + c;
   await ctx.close();
 }
 
+/* ---------- 12. 첫 화면: 스크롤 없이 '시작하기' ---------- */
+for (const [w, h] of [[360, 640], [390, 844], [412, 915]]) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/`);
+  const btn = page.locator('.btn', { hasText: '시작하기' });
+  await btn.waitFor();
+  await page.waitForTimeout(400);
+  const r = await btn.boundingBox();
+  ok(`${w}×${h}: 처음 열면 '시작하기'가 스크롤 없이 화면 안`, r && r.y >= 0 && r.y + r.height <= h, r);
+  const fontOk = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return document.fonts.check('20px Jua', '꽃정원');
+  });
+  ok(`${w}×${h}: 둥근 글꼴(Jua) 적용`, fontOk);
+  await btn.click();
+  ok(`${w}×${h}: 시작하기 → 도움말 닫힘 · 첫 수 안내 보임`, !(await page.locator('.modal').count()) && (await page.locator('.tap-hint').isVisible()));
+  await ctx.close();
+}
+
+/* ---------- 13. 함께 보는 순위: 이름 한 번 · 자동 등록 · 인터넷 끊김 ---------- */
+{
+  const ctx = await browser.newContext(phone);
+  const rows = [
+    { name: '영희', score: 2450, level: 4, device: 'd-aaaa1111' },
+    { name: '순자', score: 900, level: 2, device: 'd-bbbb2222' },
+  ];
+  let down = false;
+  const posts = [];
+  await ctx.route('https://lb.test/exec**', async (route) => {
+    if (down) return route.abort('internetdisconnected');
+    const req = route.request();
+    const u = new URL(req.url());
+    let me = '';
+    if (req.method() === 'POST') {
+      const d = JSON.parse(req.postData());
+      posts.push(d);
+      rows.push(d);
+      me = d.device + '|' + d.name;
+    } else if (u.searchParams.get('device')) me = u.searchParams.get('device') + '|' + u.searchParams.get('name');
+    const best = {};
+    for (const r of rows) {
+      const k = r.device + '|' + r.name;
+      if (!best[k] || r.score > best[k].score) best[k] = { ...r, key: k };
+    }
+    const list = Object.values(best).sort((a, c) => c.score - a.score);
+    const rank = list.findIndex((e) => e.key === me) + 1 || null;
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, total: list.length, rank, top: list.map((e) => ({ name: e.name, score: e.score, level: e.level, mine: e.key === me })) }) });
+  });
+  const LB = '&lb=' + encodeURIComponent('https://lb.test/exec');
+  const page = await open(ctx, 'test=1&seed=21' + LB);
+  const endGame = async (score) =>
+    page.evaluate((score) => {
+      const s = window.__fg.state();
+      const cols = ['red', 'yellow', 'pink'];
+      let k = 0;
+      const b = s.board.map((c) => ({ ...c, layers: c.active ? [cols[k++ % 3]] : [] }));
+      window.__fg.load({ ...s, board: b, over: true, score, totalPopped: 60, turn: 80 + (score % 7) }); // 단계는 보드(13칸)와 맞게 그대로
+    }, score);
+
+  await endGame(1500);
+  await page.locator('#player-name').waitFor();
+  ok('처음 끝나면 이름을 물어봄', await page.locator('#player-name').isVisible());
+  await page.fill('#player-name', '  우리 엄마<b>  ');
+  await page.locator('.btn', { hasText: '순위에 올리기' }).click();
+  await page.locator('.rank-me').waitFor();
+  ok('이름 다듬어 전송(꺾쇠 제거)', posts.at(-1)?.name === '우리 엄마b', posts.at(-1));
+  ok('등수 표시: 3명 중 2등', (await page.locator('.rank-me').textContent()).includes('3명 중 2등'));
+  ok('순위표에 내 줄 강조', (await page.locator('.rank-list li.mine .nm').textContent()) === '우리 엄마b');
+
+  // 새 게임 → 다시 끝: 이름 안 묻고 바로 등록
+  await page.locator('.btn', { hasText: '새 정원 가꾸기' }).click();
+  await endGame(3000);
+  await page.locator('.rank-me').waitFor();
+  ok('두 번째부터는 이름을 안 물음(저장된 이름으로 자동 등록)', (await page.locator('#player-name').count()) === 0 && posts.length === 2 && posts[1].name === '우리 엄마b');
+  ok('최고 점수로 1등', (await page.locator('.rank-me').textContent()).includes('1등'));
+  ok('같은 기기는 같은 기기 번호', posts[0].device === posts[1].device && /^d-[a-z0-9-]+$/.test(posts[0].device));
+
+  // 새로고침해도 같은 판을 두 번 올리지 않음
+  await page.goto(`${BASE}/?test=1${LB}`); // seed 없이 → 저장된 판(끝난 상태) 그대로 열기
+  await page.waitForFunction(() => window.__fg && window.__fgAssets);
+  await page.locator('.rank-list').waitFor();
+  ok('새로고침해도 같은 판은 다시 안 올림', posts.length === 2, posts.length);
+
+  // 인터넷 끊김 → 모아 두었다가 연결되면 보냄
+  await page.locator('.btn', { hasText: '새 정원 가꾸기' }).click();
+  down = true;
+  await endGame(700);
+  await page.locator('.rank-note').waitFor();
+  ok('인터넷 끊김: 안내 문구', (await page.locator('.rank-note').textContent()).includes('인터넷'));
+  ok('인터넷 끊김: 기록은 보관', (await page.evaluate(() => JSON.parse(localStorage.getItem('flowerGarden.pendingScores.v1') || '[]').length)) === 1);
+  down = false;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(500);
+  ok('연결되면 보관한 기록 전송', posts.length === 3 && posts[2].score === 700, posts.length);
+  ok('보관함 비움', (await page.evaluate(() => JSON.parse(localStorage.getItem('flowerGarden.pendingScores.v1') || '[]').length)) === 0);
+
+  // 도구 '순위' 버튼
+  await page.locator('.btn', { hasText: '새 정원 가꾸기' }).click();
+  await page.locator('.tool', { hasText: '순위' }).click();
+  await page.locator('.rank-list').waitFor();
+  const names = await page.locator('.rank-list .nm').allTextContents();
+  ok('순위 버튼: 함께 보는 순위 목록', (await page.locator('.modal-head h2').textContent()) === '함께 보는 순위' && names[0] === '우리 엄마b' && names.includes('영희'), names);
+  await page.screenshot({ path: OUT + 'e2e-rank.png' });
+  const errs13 = page.errors.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e)); // 일부러 끊은 요청 로그는 제외
+  ok('오류 없음(13)', errs13.length === 0, errs13);
+  await ctx.close();
+}
+
+/* ---------- 14. 순위 서버 없을 때: 이 기기 기록 ---------- */
+{
+  const ctx = await browser.newContext(phone);
+  const page = await open(ctx, 'test=1&seed=22');
+  await page.evaluate(() => localStorage.setItem('flowerGarden.playerName.v1', '꽃님이'));
+  await page.evaluate(() => {
+    const s = window.__fg.state();
+    const cols = ['red', 'yellow', 'pink'];
+    let k = 0;
+    window.__fg.load({ ...s, board: s.board.map((c) => ({ ...c, layers: c.active ? [cols[k++ % 3]] : [] })), over: true, score: 800, totalPopped: 40, turn: 50 });
+  });
+  await page.locator('.rank-list').waitFor();
+  ok('서버 없으면 이 기기 기록으로 등수', (await page.locator('.rank-me').textContent()).includes('이 기기 기록 중 1등'));
+  ok('준비 중 안내', (await page.locator('.rank-note').textContent()).includes('준비 중'));
+  await ctx.close();
+}
+
 /* ---------- 9. 외부 요청 없음(광고·추적 없음) ---------- */
 {
   const ctx = await browser.newContext(phone);

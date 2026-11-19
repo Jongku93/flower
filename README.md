@@ -20,12 +20,18 @@ npm run build      # dist/ 생성 (서비스워커·매니페스트 포함)
 npm run preview    # http://localhost:4173
 ```
 
+## 함께 보는 순위
+
+게임이 끝나면 이름(별명)을 한 번 쓰고 순위에 올립니다. 이름은 그 휴대폰에 저장되어 다음부터는 자동으로 올라갑니다.
+점수는 개인 구글 시트(Apps Script 웹 앱)에 모입니다 → 설치: [`server/SETUP.md`](server/SETUP.md).
+서버 주소가 없으면 '이 기기 기록'만 보여 줍니다.
+
 ## 시험
 
 ```bash
-npm test                         # 엔진·저장 단위 시험 (vitest, 27개)
+npm test                         # 엔진·저장 단위 시험 (vitest, 33개 — 순위 서버 포함)
 npm run build && npm run preview # (다른 창에서 띄워 둔 채로)
-npm run e2e                      # 휴대폰 화면 시험 (Playwright Chromium, 61개 항목)
+npm run e2e                      # 휴대폰 화면 시험 (Playwright Chromium, 86개 항목)
 node tests/e2e/shot.mjs          # 팝 장면 스크린샷 → tests/e2e/shots/
 npx vite-node tools/balance-sim.ts  # 난이도 점검(자동 플레이 600판)
 ```
