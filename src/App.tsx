@@ -34,8 +34,8 @@ import { GameOverModal, HelpModal, RankModal, SettingsModal } from './ui/Modals'
 const TEST_MODE = new URLSearchParams(location.search).has('test');
 // 시험 때만: ?test=1&lb=<가짜 순위 서버 주소>
 if (TEST_MODE) {
-  const lb = new URLSearchParams(location.search).get('lb');
-  if (lb !== null) setLeaderboardUrl(lb);
+  // 시험은 진짜 순위 시트에 절대 기록하지 않는다: 가짜 주소(lb)를 줄 때만 그 주소, 아니면 서버 없음
+  setLeaderboardUrl(new URLSearchParams(location.search).get('lb') ?? '');
 }
 const HELP_SEEN_KEY = 'flowerGarden.helpSeen.v1';
 
